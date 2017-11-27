@@ -1,0 +1,39 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+train<-read.csv("~/Desktop/Fall2017-project4-grp5-master/data/MS_sample/data_train.csv",header = T)[,-1]
+test<-read.csv("~/Desktop/Fall2017-project4-grp5-master/data/MS_sample/data_test.csv",header = T)[,-1]
+
+mat_data<-function(msweb){
+    user<-msweb[msweb$V1=="C",2]
+    area<-unique(msweb[msweb$V1=="V",2])
+    mat<-matrix(0,nrow=length(user),ncol=length(area))
+    colnames(mat)<- as.character(area[order(area)])
+    rownames(mat)<- as.character(user)
+    
+    for (i in 1:((nrow(msweb)-1))){
+        if(msweb[i,1]=="C"){
+            userid<-msweb[i,2]
+            while(msweb[i+1,1]=="V"){
+            mat[as.character(userid),as.character(msweb[i+1,2])]=1
+            if((i+1)!=nrow(msweb)){
+              i <- i+1
+            }
+            else break
+           }
+        }
+    }
+    return(mat)
+}
+
+train1<-mat_data(train)
+test1<-mat_data(test)
+save(train1, file = "~/Desktop/Fall2017-project4-grp5-master/data/MS_sample/train1.RData")
+save(test1, file = "~/Desktop/Fall2017-project4-grp5-master/data/MS_sample/test1.RData")
+
+
+```
+
