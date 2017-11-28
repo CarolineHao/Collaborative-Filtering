@@ -117,6 +117,8 @@ generate_simrank_rdata = function(filename="simrank_matrix") {
     
   }
   
+  User_Matrix[upper.tri(User_Matrix)] <- t(User_Matrix)[upper.tri(User_Matrix)]
+  
   save(User_Matrix,Users,file=paste0("../output/",filename,".RData"))
   
 }
