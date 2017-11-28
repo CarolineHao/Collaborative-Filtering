@@ -83,8 +83,8 @@ compute_movie_sim = function(j, k,
 
 generate_simrank_rdata = function(filename="simrank_matrix") {
   
-  train = read.csv("data_train.csv")
-  test = read.csv("data_test.csv")
+  train = read.csv("../data/eachmovie_sample/data_train.csv")
+  test = read.csv("../data/eachmovie_sample/data_test.csv")
   
   train$rescore = 0
   train$rescore[which(train$Score >= 6)] = 1
