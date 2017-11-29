@@ -1,0 +1,224 @@
+---
+title: "Untitled"
+author: "Peilin Qiu(pq2128) & Xin Gao (xg2249)"
+date: "11/15/2017"
+output: html_document
+---
+```{r}
+load("../data/MS_sample/train1.RData")
+load("../data/MS_sample/test1.RData")
+set.seed(1)
+
+N <- dim(train1)[1]
+D <- dim(train1)[2]
+N2 <- dim(test1)[1]
+
+I_1 = list() # list of papers voted 1 by each user 
+I_1[[1]] = as.numeric(unlist(which(train1[1,] == 1)))
+for (i in 2:N) {
+  k = as.numeric(unlist(which(train1[i,] == 1)))
+  I_1 = c(I_1,list(k))
+}
+
+I_0 = list() # list of papers voted 0 by each user 
+I_0[[1]] = as.numeric(unlist(which(train1[1,] == 0)))
+for (i in 2:N) {
+  k = as.numeric(unlist(which(train1[i,] == 0)))
+  I_0 = c(I_0,list(k))
+}
+
+J_1 = list() # list of users who vote 1 each paper
+J_1[[1]] = as.numeric(unlist(which(train1[,1] == 1)))
+for (i in 2:D) {
+  k = as.numeric(unlist(which(train1[,i] == 1)))
+  J_1 = c(J_1,list(k))
+}
+
+J_0 = list() # list of users who vote 0 each paper
+J_0[[1]] = as.numeric(unlist(which(train1[,1] == 0)))
+for (i in 2:D) {
+  k = as.numeric(unlist(which(train1[,i] == 0)))
+  J_0 = c(J_0,list(k))
+}
+
+multinomialEM <- function(data, C, t = 1*10^-6){
+  change_1 <- 1 # Measures change in centroids
+  change_0 <- 1
+  #cp <- matrix(1/C, nrow = N, ncol = C)
+  cp <- runif(C)
+  cp = cp/sum(cp)
+  gamma_1 = matrix(runif(C*D), nrow = C, ncol = D)
+  gamma_0 = 1-gamma_1
+  A <- matrix (0, N, C) # responsibilities pi
+  Phi <- matrix(0, N, C)
+
+  while(change_1 > t | change_0 > t){
+    # E step
+    for (k in 1:C) {
+      for (i in 1:N) {
+        Phi[i,k] = prod(gamma_0[k,I_0[[i]]]) * prod(gamma_1[k,I_1[[i]]]) * cp[k]
+      }
+    }
+    
+    A<-Phi/rowSums(Phi)
+    
+    #for (i in 1:N) {
+    #  A[i, ] <- Phi[i, ]/sum(Phi[i, ]) # responsibilities pi
+    #}
+    
+    # M step
+ 
+    cp = colSums(A)/N
+    
+    
+    gamma_1_old = gamma_1
+    gamma_0_old = gamma_0
+    
+    for (k in 1:C) {
+      for (j in 1:D) {
+        gamma_1[k,j] = sum(A[J_1[[j]],k])/sum(A[,k])
+        gamma_0[k,j] = sum(A[J_0[[j]],k])/sum(A[,k])
+      }
+    }
+    
+    change_1 = norm(gamma_1_old - gamma_1, type = "O")
+    change_0 = norm(gamma_0_old - gamma_0, type = "O")
+  }
+  return(result = list(cp, gamma_1, gamma_0, A))
+
+}
+
+# Try 
+#try1 = multinomialEM(train1, 3)
+#try1[[1]]
+# ----------------------------------------------------------------------------------------------------------
+# Prediction
+predictCF <- function(data_test = test1, param){
+  B = list() # list of papers needed to predict from each user
+  B[[1]] = as.numeric(unlist(which(data_test[1,] == 1)))
+  for (i in 2:N2) {
+    k = as.numeric((which(data_test[i,] == 1)))
+    B = c(B,list(k))
+  }
+
+  gamma1 = param[[2]]
+  A = param[[4]]
+  expect.mat = matrix(0, ncol = ncol(data_test), nrow = nrow(data_test))
+  colnames(expect.mat) = colnames(data_test)
+  for (i in 1:length(B)) {
+    for (j in 1:length(B[[i]])) {
+      if(length(B[[i]]) == 0){
+        expect.mat[i,B[[i]][j]] = NA
+    }
+      else{
+        expect.mat[i,B[[i]][j]] = (A[i,] %*% gamma1[,B[[i]]])[j]
+    }
+
+   }
+ }
+
+  return(expect.mat)
+}
+
+#  try1.pred = predictCF(test1, try1)
+#-------------------------------------------------------------------------------------------------------#------------------------------------------------------------------------------------------------------
+# 
+# Separate the training data into two parts--training set and validation set
+  
+   training_data = train1
+   validation_data = matrix(0,nrow = nrow(train1), ncol = ncol(train1))
+   rownames(validation_data)<-rownames(training_data)
+   colnames(validation_data)<-colnames(training_data)
+   set.seed(2249)
+   index<-c()
+   
+    for (i in 1:nrow(training_data)) {
+      
+      index<-as.numeric(unlist(which(train1[i,] == 1)))
+      v_index <- sample(index, round(length(index) * 0.25))
+      training_data[i,v_index]<-0
+      validation_data[i,v_index]<-1
+      
+    }
+#all((validation_data+training_data)==train1)
+   
+# Caculate the accuracy rate using ranked scoring
+   
+R<-function(predict,true,d=0,alpha=10){
+  
+  r<-rep(0,nrow(true))
+  r_max<-rep(0,nrow(true))
+  
+  for(a in 1:nrow(true)){
+    
+    r[a]<-sort(r[a],decreasing = T)
+    true[a,]<-sort(true[a,],decreasing = T)
+    
+    for(j in 1:ncol(true)){
+      
+      r[a]<-r[a]+max(predict[a,]-d,0)/2^((j-1)/(alpha-1))
+      r_max[a]<-r_max[a]+sum(max(true[a,]-d,0)/2^((j-1)/(alpha-1)))
+      
+    }
+  }
+  
+  rs<-100*sum(r)/sum(r_max)
+  return(rs)
+}
+
+# Choose the best cluster number
+nC = 3:25 
+
+cv.accuracy<- c()
+for (i in 1:length(nC)) {
+ 
+  coef = multinomialEM(training_data, nC[i])
+  EM_predict = predictCF(validation_data, coef)
+  cv.accuracy[i] <- R(EM_predict,validation_data,d=0,alpha=10)
+  
+}
+
+#validation
+# [1] 6.873618 7.745415 7.806073 7.449895 8.105736 7.695716 8.258315 7.049097 8.064468 8.284495
+# [11] 7.937930 8.432793 7.996215 7.772650 8.306490 7.983393 8.634706 8.535889 7.486141 7.645274
+# [21] 8.027794 8.946336 8.291748
+
+plot(nC,cv.accuracy,type="b")
+
+best.C = 19
+
+# Test Error
+best.coef <- multinomialEM(train1, C = best.C)
+best.pred <- predictCF(test1, best.coef)
+accuracy1 <-sum(best.pred)/sum(test1)
+accuracy2<-R(best.pred,test1,d=0,alpha=10)
+# 39.4138
+
+
+
+# acc2<-c()
+# for(i in 1:length(nC)){
+#   best.coef <- multinomialEM(train1, C =nC[i] )
+#   best.pred <- predictCF(test1, best.coef)
+#   #acc[i] <-sum(best.pred)/sum(test1)
+#   acc2[i]<-R(best.pred,test1,d=0,alpha=10)
+# }
+# plot(nC,acc2,type="b")
+
+#test
+#  [1] 37.41004 37.53257 37.70236 37.55737 37.50695 37.93548 37.51582 39.23319 37.88936 38.01596
+# [11] 39.58520 38.90461 37.99539 38.95814 38.41269 38.91094 39.41380 39.35921 37.62343 38.87883
+# [21] 38.90579 38.18666 39.69852
+```
+
+
+
+
+
+
+
+
+
+
+
+
