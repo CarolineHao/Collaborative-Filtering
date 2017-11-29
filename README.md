@@ -4,15 +4,21 @@
 
 Term: Fall 2017
 
-+ Team # 5
++ Team 5
 + Projec title: Collaborative Filtering
+
 + Team members
 	+ Gao, Xin xg2249@columbia.edu
 	+ Hao, Shuyao sh3565@columbia.edu
 	+ Li, Peter pwl2107@columbia.edu
 	+ Qiu, Peilin pq2128@columbia.edu
 	+ Tan, Chaoyue ct2774@columbia.edu
-+ Project summary: Our project mainly focuses on the implementation and evaluation of memory-based and model-based algorithms. Also, we will implement these two algorithms using two different datasets. We will furthur compare the performance within the components of memory-based model and find the best setting for the memory-based model. Then, compare the performance between memory-based and model-based algorithms.
+
++ Project summary: 
+In this project, we implemented two algorithms: memory-based algorithm, including Similarity Weight, Selecting Neighbours and Rating Normalization and model-based algorithm, including Cluster Models to conduct Collaborative Filtering. And we used two datasets, Anonymous Microsoft Web Data and EachMovie Dataset to evaluate and compare a pair of algorithms for collaborative ﬁltering (CF). For evaluation part, compare the performance for these diﬀerent algorithms and component combinations using  ranked scoring for dataset 1 and mean absolute error (MAE) and ROC sensitivity for dataset 2.
+
++ Project details:
+First, 
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
