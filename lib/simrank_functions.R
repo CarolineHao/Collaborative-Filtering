@@ -122,3 +122,56 @@ generate_simrank_rdata = function(filename="simrank_matrix") {
   save(User_Matrix,Users,file=paste0("../output/",filename,".RData"))
   
 }
+
+
+select_nth_largest = function(x,n=10) {
+  
+  return(sort(x,decreasing=T)[n])
+  
+}
+
+create_neighbors_matrix_movies = function(movie_cor_matrix,n_neighbors) {
+  
+  neighbors = apply(X = movie_cor_matrix,MARGIN = 1, FUN = select_nth_largest,n = n_neighbors)
+  
+  res = matrix(NA,nrow = nrow(movie_cor_matrix),ncol = n_neighbors)
+  
+  rownames(res) = rownames(movie_cor_matrix)
+  
+  for (i in 1:nrow(res))
+    res[i,] = names(which(movie_cor_matrix[i,] >= neighbors[i]))
+  
+  return(res)
+  
+}
+
+computeZScore_Movie <- function(weights=weights_, neighbors=neighbors_, df=tmp_, a, i){
+  neighbors_a <- neighbors[toString(a), ] 
+  num <- rep(0, length(neighbors_a))
+  for (u in 1:length(neighbors_a)){
+    neighborU <- neighbors_a[u] 
+    r_ui <- df[toString(neighborU), toString(i)]
+    r_u <- mean(as.numeric(df[neighborU, ]))
+    sd_u <- sd(as.numeric(df[neighborU, ]))
+    if (toString(a) %in% rownames(weights) & neighborU %in% colnames(weights)) {
+      w_au <- weights[toString(a), neighborU]
+    } else {
+      w_au = 0
+    }
+
+    num[u] <- (r_ui - r_u)/sd_u * w_au
+  }
+  
+  if (toString(a) %in% rownames(weights)) {
+    tmp_a = which(neighbors_a %in% colnames(weights))
+    w_a <- sum(weights[toString(a), tmp_a])
+  } else {
+    w_au = 1
+  }
+  sd_a <- sd(df[toString(a), ])
+  r_a <- mean(as.numeric(df[toString(a),]))
+  p_ai <- r_a + sd_a * sum(num)/w_a
+  return (p_ai)
+}
+
+

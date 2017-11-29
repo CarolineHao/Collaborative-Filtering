@@ -1,0 +1,41 @@
+---
+title: "Run_Simrank_Eval.Rmd"
+output: html_document
+---
+
+```{r}
+source("../lib/simrank_functions.R")
+
+train = read.csv("../data/eachmovie_sample/data_train.csv")
+
+tmp = cast(User ~ Movie,value='Score',data=train)
+tmp[is.na(tmp)] = 0
+rownames(tmp) = tmp$User
+tmp_ = tmp[,-1]
+
+movie_cor_matrix = cor(t(tmp))
+movie_cor_matrix[ row(movie_cor_matrix) == col(movie_cor_matrix) ] <- 0
+
+rownames(movie_cor_matrix) = tmp$User
+
+load("../output/simrank_matrix.RData")
+
+weights = User_Matrix
+rownames(weights) = Users
+colnames(weights) = Users
+weights[ row(weights) == col(weights) ] = 0
+weights_ = weights / rowSums(weights)
+
+neighbors_ = create_neighbors_matrix_movies(movie_cor_matrix = movie_cor_matrix,
+                                           n_neighbors = 10)
+
+
+test = read.csv("../data/eachmovie_sample/data_test.csv")
+test$zscore = NA
+
+test$zscore = mapply(computeZScore_Movie,
+                     a = test$User,
+                     i = test$Movie)
+
+save(test,file=paste0("../output/simrank_test_zscore.RData"))
+```
