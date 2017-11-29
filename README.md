@@ -4,7 +4,7 @@
 
 Term: Fall 2017
 
-+ Team #
++ Team # 5
 + Projec title: Collaborative Filtering
 + Team members
 	+ Gao, Xin xg2249@columbia.edu
@@ -12,7 +12,7 @@ Term: Fall 2017
 	+ Li, Peter pwl2107@columbia.edu
 	+ Qiu, Peilin pq2128@columbia.edu
 	+ Tan, Chaoyue ct2774@columbia.edu
-+ Project summary: 
++ Project summary: Our project mainly focuses on the implementation and evaluation of memory-based and model-based algorithms. Also, we will implement these two algorithms using two different datasets. We will furthur compare the performance within the components of memory-based model and find the best setting for the memory-based model. Then, compare the performance between memory-based and model-based algorithms.
 	
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. 
 
