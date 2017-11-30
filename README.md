@@ -1,7 +1,7 @@
 # Project 4: Collaborative Filtering
 
 ### [Project Description](doc/project4_desc.md)
-![screenshot](fig/map_pic1.png)
+![screenshot](figs/friendship_social_network.jpg)
 
 Term: Fall 2017
 
