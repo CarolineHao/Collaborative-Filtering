@@ -27,6 +27,8 @@ In the memory-based algorithm:
 First, we computed different similarity weights. Then, we selected best-n neighbors based on their weights. Last, we predicted ratings using z-score.
 In the model-based algorithm, we used cluster model to do Collaborative Filtering.
 
++ Results:
+We found memory-based model with pearson weight + significance weighting + best-n + z-score produced the highest R-score. 
 
 **Contribution statement**: ([default](doc/a_note_on_contributions.md)) All team members contributed equally in all stages of this project. All team members approve our work presented in this GitHub repository including this contributions statement. And the most important thing is all of our members worked very hard to complete our project.
 
