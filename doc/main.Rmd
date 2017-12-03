@@ -211,9 +211,9 @@ accuracy2<-R(best.pred,test1,d=0,alpha=10)
 # Memory-based Algorithm
 
 
-### similarity weights
+## similarity weights
 
-##### Calculate pearson correlation
+#### Calculate pearson correlation
 ```{r}
 weights_pearson <- cor(t(train1), method = "pearson")
 #saveRDS(weights_pearson, file = "weights_pearson_train1.RData")
@@ -224,7 +224,7 @@ weights_pearson_train2 <- cor(t(train2), use = "pairwise.complete.obs", method =
 
 ```
 
-##### Calculate spearman correlation
+#### Calculate spearman correlation
 ```{r}
 weights_spearman <- cor(t(train1), method = "spearman")
 #saveRDS(weights_spearman, file = "weights_spearman_train1.RData")
@@ -233,7 +233,7 @@ weights_spearman_train2 <- cor(t(train2), use = "pairwise.complete.obs", method 
 #saveRDS(weights_spearman_train2, file = "weights_spearman_train2.RData")
 ```
 
-##### Calculate Mean square difference
+#### Calculate Mean square difference
 ```{r}
 meanSquareDiff <- function(df){
   m <- dim(df)[1] #user number
@@ -394,9 +394,9 @@ generate_simrank_rdata = function(filename="simrank_matrix") {
 }
 ```
 
-# Significance Weighting 
+## Significance Weighting 
 
-### Dataset 1 
+#### Dataset 1 
 
 ```{r}
 significance_weight_fn = function(a,u,df) {
@@ -439,7 +439,7 @@ for (i in 1:m){
 
 
 
-### Dataset 2 
+#### Dataset 2 
 
 ```{r}
 significance_weight_fn2 = function(a,u,df) {
@@ -487,9 +487,9 @@ for (i in 1:m){
 
 ```
 
-# Variance weighting
+## Variance weighting
 
-### Dataset 1
+#### Dataset 1
 
 ```{r}
 
@@ -540,7 +540,7 @@ variance_weight1<-variance_weight_Fun(train1)
 ```
 
 
-### Dataset 2
+#### Dataset 2
 
 ```{r}
 
@@ -603,7 +603,7 @@ for (i in 1:m){
 
 ```
 
-# Select neighbors: best-n
+## Select neighbors: best-n
 
 ```{r}
 
@@ -623,7 +623,7 @@ selectNeighborWeights <- function(df, weights, n){
 ```
 
 
-# Rating Normalization - z-score
+## Rating Normalization - z-score
 ```{r}
 
 computeZScore <- function(weights, neighbors, df, a, i){
@@ -668,7 +668,7 @@ computeZScoreMatrix <- function(weights, neighbors, df, df_test){
 ## Predict
 
 
-#####  Pearson
+####  Pearson
 
 ```{r}
 neighbors_pearson_train1 <- selectNeighborWeights(train1, weights_pearson, 20)
@@ -677,7 +677,7 @@ ZScoreMatrix_pearson_test1 <- computeZScoreMatrix(weights_pearson, neighbors_pea
 ZScoreMatrix_pearson_test2 <- computeZScoreMatrix(weights_pearson_train2, neighbors_pearson_train2, train2,test2)
 ```
 
-##### Spearman
+#### Spearman
 
 ```{r}
 neighbors_spearman_train1 <- selectNeighborWeights(train1, weights_spearman, 20)
@@ -686,7 +686,7 @@ ZScoreMatrix_spearman_test1 <- computeZScoreMatrix(weights_spearman, neighbors_s
 ZScoreMatrix_spearman_test2 <- computeZScoreMatrix(weights_spearman_train2, neighbors_spearman_train2, train2,test2)
 ```
 
-##### MSD
+#### MSD
 
 ```{r}
 neighbors_MSD_train1 <- selectNeighborWeights(train1, weights_MSD_train1, 20)
@@ -696,7 +696,7 @@ ZScoreMatrix_MSD_test2 <- computeZScoreMatrix(weights_MSD_train2, neighbors_MSD_
 ```
 
 
-##### SimRank
+#### SimRank
 ```{r}
 neighbors_SR_train1 <- selectNeighborWeights(train1, User_Matrix, 20)
 neighbors_SR_train2 <- selectNeighborWeights(train2, Movie_Matrix, 20)
@@ -704,7 +704,7 @@ ZScoreMatrix_SR_test1 <- computeZScoreMatrix(User_Matrix, neighbors_SR_train1, t
 ZScoreMatrix_SR_test2 <- computeZScoreMatrix(Movie_Matrix, neighbors_SR_train2, train2,test2)
 ```
 
-##### Pearson + Sig
+#### Pearson + Sig
 
 ```{r}
 neighbors_pearson_sig_train1 <- selectNeighborWeights(train1, significant_weight, 20)
@@ -714,7 +714,7 @@ ZScoreMatrix_pearson_sig_test2 <- computeZScoreMatrix(significant_weight2, neigh
 ```
 
 
-##### Pearson + Var
+#### Pearson + Var
 
 ```{r}
 neighbors_pearson_var_train1 <- selectNeighborWeights(train1, variance_weight1, 20)
