@@ -1,0 +1,728 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+# Load processed datasets
+```{r}
+train2 <- readRDS("../data/train.movierank.RData")
+test2 <- readRDS("../data/test.movierank.RData")
+load("../data/MS_sample/train1.RData")
+load("../data/MS_sample/test1.RData")
+```
+
+# Model-based Algorithm
+
+### EM algorithm 
+```{r}
+
+N <- dim(train1)[1]
+D <- dim(train1)[2]
+N2 <- dim(test1)[1]
+
+I_1 = list() # list of papers voted 1 by each user 
+I_1[[1]] = as.numeric(unlist(which(train1[1,] == 1)))
+for (i in 2:N) {
+  k = as.numeric(unlist(which(train1[i,] == 1)))
+  I_1 = c(I_1,list(k))
+}
+
+I_0 = list() # list of papers voted 0 by each user 
+I_0[[1]] = as.numeric(unlist(which(train1[1,] == 0)))
+for (i in 2:N) {
+  k = as.numeric(unlist(which(train1[i,] == 0)))
+  I_0 = c(I_0,list(k))
+}
+
+J_1 = list() # list of users who vote 1 each paper
+J_1[[1]] = as.numeric(unlist(which(train1[,1] == 1)))
+for (i in 2:D) {
+  k = as.numeric(unlist(which(train1[,i] == 1)))
+  J_1 = c(J_1,list(k))
+}
+
+J_0 = list() # list of users who vote 0 each paper
+J_0[[1]] = as.numeric(unlist(which(train1[,1] == 0)))
+for (i in 2:D) {
+  k = as.numeric(unlist(which(train1[,i] == 0)))
+  J_0 = c(J_0,list(k))
+}
+
+multinomialEM <- function(data, C, t = 1*10^-6){
+  change_1 <- 1 # Measures change in centroids
+  change_0 <- 1
+  #cp <- matrix(1/C, nrow = N, ncol = C)
+  cp <- runif(C)
+  cp = cp/sum(cp)
+  gamma_1 = matrix(runif(C*D), nrow = C, ncol = D)
+  gamma_0 = 1-gamma_1
+  A <- matrix (0, N, C) # responsibilities pi
+  Phi <- matrix(0, N, C)
+
+  while(change_1 > t | change_0 > t){
+    # E step
+    for (k in 1:C) {
+      for (i in 1:N) {
+        Phi[i,k] = prod(gamma_0[k,I_0[[i]]]) * prod(gamma_1[k,I_1[[i]]]) * cp[k]
+      }
+    }
+    
+    A<-Phi/rowSums(Phi)
+    
+    #for (i in 1:N) {
+    #  A[i, ] <- Phi[i, ]/sum(Phi[i, ]) # responsibilities pi
+    #}
+    
+    # M step
+ 
+    cp = colSums(A)/N
+    
+    
+    gamma_1_old = gamma_1
+    gamma_0_old = gamma_0
+    
+    for (k in 1:C) {
+      for (j in 1:D) {
+        gamma_1[k,j] = sum(A[J_1[[j]],k])/sum(A[,k])
+        gamma_0[k,j] = sum(A[J_0[[j]],k])/sum(A[,k])
+      }
+    }
+    
+    change_1 = norm(gamma_1_old - gamma_1, type = "O")
+    change_0 = norm(gamma_0_old - gamma_0, type = "O")
+  }
+  return(result = list(cp, gamma_1, gamma_0, A))
+
+}
+
+```
+
+### Predict after training
+```{r}
+# Prediction
+predictCF <- function(data_test = test1, param){
+  B = list() # list of papers needed to predict from each user
+  B[[1]] = as.numeric(unlist(which(data_test[1,] == 1)))
+  for (i in 2:N2) {
+    k = as.numeric((which(data_test[i,] == 1)))
+    B = c(B,list(k))
+  }
+
+  gamma1 = param[[2]]
+  A = param[[4]]
+  expect.mat = matrix(0, ncol = ncol(data_test), nrow = nrow(data_test))
+  colnames(expect.mat) = colnames(data_test)
+  for (i in 1:length(B)) {
+    for (j in 1:length(B[[i]])) {
+      if(length(B[[i]]) == 0){
+        expect.mat[i,B[[i]][j]] = NA
+    }
+      else{
+        expect.mat[i,B[[i]][j]] = (A[i,] %*% gamma1[,B[[i]]])[j]
+    }
+
+   }
+ }
+
+  return(expect.mat)
+}
+
+```
+
+### Use CV to pick the best cluster number and use ranked scoring for evaluation
+```{r}
+# Separate the training data into two parts--training set and validation set
+  
+   training_data = train1
+   validation_data = matrix(0,nrow = nrow(train1), ncol = ncol(train1))
+   rownames(validation_data)<-rownames(training_data)
+   colnames(validation_data)<-colnames(training_data)
+   set.seed(2249)
+   index<-c()
+   
+    for (i in 1:nrow(training_data)) {
+      
+      index<-as.numeric(unlist(which(train1[i,] == 1)))
+      v_index <- sample(index, round(length(index) * 0.25))
+      training_data[i,v_index]<-0
+      validation_data[i,v_index]<-1
+      
+    }
+
+# Caculate the accuracy rate using ranked scoring
+   
+R<-function(predict,true,d=0,alpha=10){
+  
+  r<-rep(0,nrow(true))
+  r_max<-rep(0,nrow(true))
+  
+  for(a in 1:nrow(true)){
+    
+    r[a]<-sort(r[a],decreasing = T)
+    true[a,]<-sort(true[a,],decreasing = T)
+    
+    for(j in 1:ncol(true)){
+      
+      r[a]<-r[a]+max(predict[a,]-d,0)/2^((j-1)/(alpha-1))
+      r_max[a]<-r_max[a]+sum(max(true[a,]-d,0)/2^((j-1)/(alpha-1)))
+      
+    }
+  }
+  
+  rs<-100*sum(r)/sum(r_max)
+  return(rs)
+}
+
+# Choose the best cluster number
+nC = 3:25 
+
+cv.accuracy<- c()
+for (i in 1:length(nC)) {
+ 
+  coef = multinomialEM(training_data, nC[i])
+  EM_predict = predictCF(validation_data, coef)
+  cv.accuracy[i] <- R(EM_predict,validation_data,d=0,alpha=10)
+  
+}
+
+#validation
+# [1] 6.873618 7.745415 7.806073 7.449895 8.105736 7.695716 8.258315 7.049097 8.064468 8.284495
+# [11] 7.937930 8.432793 7.996215 7.772650 8.306490 7.983393 8.634706 8.535889 7.486141 7.645274
+# [21] 8.027794 8.946336 8.291748
+
+plot(nC,cv.accuracy,type="b")
+
+
+```
+
+### Use the best parameter to calculate the accuracy
+```{r}
+# Test Error
+best.C = 19
+best.coef <- multinomialEM(train1, C = best.C)
+best.pred <- predictCF(test1, best.coef)
+accuracy1 <-sum(best.pred)/sum(test1)
+accuracy2<-R(best.pred,test1,d=0,alpha=10)
+# 39.4138
+
+```
+
+
+# Memory-based Algorithm
+
+
+### similarity weights
+
+##### Calculate pearson correlation
+```{r}
+weights_pearson <- cor(t(train1), method = "pearson")
+#saveRDS(weights_pearson, file = "weights_pearson_train1.RData")
+
+
+weights_pearson_train2 <- cor(t(train2), use = "pairwise.complete.obs", method = "pearson")
+#saveRDS(weights_pearson_train2, file = "weights_pearson_train2.RData")
+
+```
+
+##### Calculate spearman correlation
+```{r}
+weights_spearman <- cor(t(train1), method = "spearman")
+#saveRDS(weights_spearman, file = "weights_spearman_train1.RData")
+
+weights_spearman_train2 <- cor(t(train2), use = "pairwise.complete.obs", method = "spearman")
+#saveRDS(weights_spearman_train2, file = "weights_spearman_train2.RData")
+```
+
+##### Calculate Mean square difference
+```{r}
+meanSquareDiff <- function(df){
+  m <- dim(df)[1] #user number
+  dissim <- matrix(rep(NA, m * m), m, m)
+  dissim <- data.frame(dissim)
+  users <- rownames(df)
+  colnames(dissim) <- users
+  rownames(dissim) <- users
+  for (i in 1:m){
+    for (j in 1:m){
+      r_i <- df[i,]
+      r_j <- df[j,]
+      dissim[i, j] <- mean((r_i - r_j)^2, na.rm = T)
+    }
+  }
+  maxDissim <- max(dissim)
+  sim <- (maxDissim - dissim)/maxDissim
+  return (sim)
+  
+}
+
+weights_MSD_train1 <- meanSquareDiff(train1)
+#saveRDS(weights_MSD_train1, file = "weights_MSD_train1.RData")
+
+weights_MSD_train2 <- meanSquareDiff(train2)
+#saveRDS(weights_MSD_train2, file = "weights_MSD_train2.RData")
+
+```
+
+#### Calculate simrank matrix 
+```{r}
+compute_user_cum_movie_sum = function(m1,m2,
+                                      Movie_Matrix_ = Movie_Matrix) {
+  
+  return(Movie_Matrix_[m1,m2])
+}
+
+compute_user_sim = function(j, k, iter = i,
+                            train_adj_ = train_adj,
+                            Movie_Matrix_ = Movie_Matrix,
+                            Users_ = Users,
+                            Movies_ = Movies) {
+  
+  if (j == k) {
+    return(1)
+  } else {
+    moviesj = train_adj_$Movie[which(train_adj_$User == Users_[j])]
+    moviesk = train_adj_$Movie[which(train_adj_$User == Users_[k])]
+    
+    # Pruning
+    if (length(moviesj) + length(moviesk) - 
+        length(unique(c(moviesj,moviesk))) <= 0.25 * length(moviesj)) {
+      return(0)
+    }
+    
+    # First Iter
+    if (iter == 1) {
+      return((length(moviesj) + length(moviesk) - 
+                length(unique(c(moviesj,moviesk)))) * 0.8 / length(moviesk) / length(moviesj))
+    }
+    
+    m1s = match(sort(rep(moviesj,length(moviesk))),Movies_)
+    m2s = match(rep(moviesk,length(moviesj)),Movies_)
+    
+    mins = (m1s+m2s - sqrt((m1s-m2s)^2) )/2
+    maxs = (m1s+m2s + sqrt((m1s-m2s)^2) )/2
+    
+    cum_sum = sum(mapply(compute_user_cum_movie_sum,
+                         m1 = maxs, 
+                         m2 = mins), na.rm=T)
+    
+    cum_sum = cum_sum * 0.8 / length(mins)
+    return(cum_sum)
+  }
+}
+
+
+compute_movie_cum_user_sum = function(m1,m2,
+                                      User_Matrix_ = User_Matrix) {
+  
+  return(User_Matrix_[m1,m2])
+}
+
+
+compute_movie_sim = function(j, k, 
+                             train_adj_ = train_adj,
+                             User_Matrix_ = User_Matrix,
+                             Users_ = Users,
+                             Movies_ = Movies) {
+  
+  if (j == k) {
+    return(1)
+  } else {
+    usersj = train_adj_$User[which(train_adj_$Movie == Movies_[j])]
+    usersk = train_adj_$User[which(train_adj_$Movie == Movies_[k])]
+    
+    if (length(usersj) + length(usersk) - 
+        length(unique(c(usersj,usersk))) <= 0.25 * length(usersj)) {
+      return(0)
+    }
+    
+    m1s = match(sort(rep(usersj,length(usersk))),Users_)
+    m2s = match(rep(usersk,length(usersj)),Users_)
+    
+    mins = (m1s+m2s - sqrt((m1s-m2s)^2) )/2
+    maxs = (m1s+m2s + sqrt((m1s-m2s)^2) )/2
+    
+    cum_sum = sum(mapply(compute_movie_cum_user_sum,
+                         m1 = maxs, 
+                         m2 = mins),na.rm=T)
+    
+    cum_sum = cum_sum * 0.8 / length(mins)
+    return(cum_sum)
+  }
+}
+
+
+generate_simrank_rdata = function(filename="simrank_matrix") {
+  
+  train = read.csv("../data/eachmovie_sample/data_train.csv")
+  test = read.csv("../data/eachmovie_sample/data_test.csv")
+  
+  train$rescore = 0
+  train$rescore[which(train$Score >= 6)] = 1
+  
+  train_adj = train[which(train$rescore ==1),]
+  
+  Movies = sort(unique(train_adj$Movie))
+  Users = unique(train_adj$User)
+  
+  Movie_Matrix = diag(length(Movies))
+  User_Matrix = diag(length(Users))
+  
+  for( i in 1:5 ) {
+    print(paste0("i = ",i))
+    for (j in 1:length(Users)) {
+      if (j %% 100 == 0) {
+        print(Sys.time())
+        print(paste0("Users j=",j))
+      }
+      User_Matrix[j,1:j] = mapply(compute_user_sim,j=j,k=1:j)
+    }
+    
+    for (j in 1:length(Movies)) {
+      if (j %% 50 == 0) {
+        print(Sys.time())
+        print(paste0("Movies j=",j))
+      }
+      Movie_Matrix[j,1:j] = mapply(compute_movie_sim,j=j,k=1:j)
+    }
+    
+  }
+  
+  User_Matrix[upper.tri(User_Matrix)] <- t(User_Matrix)[upper.tri(User_Matrix)]
+  
+ # save(User_Matrix,Users,file=paste0("../output/",filename,".RData"))
+  
+}
+```
+
+# Significance Weighting 
+
+### Dataset 1 
+
+```{r}
+significance_weight_fn = function(a,u,df) {
+  
+  # i is the id of movie, a and u are id of users
+  r_a = df[a, ]
+  r_u = df[u, ] 
+  
+  r_a_mean = mean(r_a)
+  r_a_sd = sd(r_a)
+  r_u_mean = mean(r_u)
+  r_u_sd = sd(r_u)
+  
+  num_a = which(r_a != 0)
+  num_u = which(r_a != 0)
+  
+  n = length(intersect(num_a, num_u))
+  significant_factor = ifelse(n < 50, n/50, 1)
+  
+  w_au = significant_factor * sum((r_a - r_a_mean) * (r_u - r_u_mean)) / (r_a_sd * r_u_sd)
+  return(w_au)
+  
+}
+
+
+users <- rownames(train1)
+m <- length(users)
+
+significant_weight <- matrix(rep(NA, m ^ 2), m, m)
+significant_weight <- data.frame(significant_weight)
+
+for (i in 1:m){
+  for (j in 1:m){
+    significant_weight[i,j] <- significance_weight_fn(users[i], users[j], train1)
+  }
+}
+
+#saveRDS(significant_weight, file = "significant_weight Dataset1.RData")
+```
+
+
+
+### Dataset 2 
+
+```{r}
+significance_weight_fn2 = function(a,u,df) {
+  a <- df[a, ]
+  u <- df[u, ]
+  
+  NA_Col_a <- which(!is.na(a))
+ 
+  NA_Col_u <- which(!is.na(u))
+  
+  c <- intersect(NA_Col_a,NA_Col_u)
+  r_a <- as.numeric(a[ , c])
+  r_u <- as.numeric(u[ , c])
+  
+  # i is the id of movie, a and u are id of users
+  
+  r_a_mean = mean(r_a)
+  r_a_sd = sd(r_a)
+  r_u_mean = mean(r_u)
+  r_u_sd = sd(r_u)
+  
+  
+  n <- length(c)
+  significant_factor <- ifelse(n < 50, n/50, 1)
+  
+  w_au = significant_factor * sum((r_a - r_a_mean) %*% (r_u - r_u_mean)) / (r_a_sd * r_u_sd)
+  return(w_au)
+  
+}
+
+
+users <- rownames(train2)
+m <- length(users)
+
+significant_weight2 <- matrix(rep(NA, m * m), m, m)
+significant_weight2 <- data.frame(significant_weight2)
+
+for (i in 1:m){
+  for (j in 1:m){
+    significant_weight2[i,j] <- significance_weight_fn2(users[i], users[j], train2)
+  }
+}
+
+#saveRDS(significant_weight2, file = "significant_weight Dataset2.RData")
+
+```
+
+# Variance weighting
+
+### Dataset 1
+
+```{r}
+
+variance_weight_Fun = function(df) {
+  
+  # i is the id of movie, a and u are id of users
+
+  
+  n <- ncol(df)
+  m <- nrow(df)
+  var <- vector()
+  
+  for(i in 1:n) {
+    var[i] <- sum((df[, i]-mean(df[,i]))^2)/(m - 1)
+  }
+  var_min <- min(var)
+  var_max <- max(var)
+  
+  v_i <- vector()
+  for(i in 1:n) {
+    v_i[i] <- (var[i] - var_min) / var_max
+  }
+  
+  
+  variance_weight <- matrix(rep(NA, m * m), m, m)
+  variance_weight <- data.frame(variance_weight)
+  
+  for (a in 1:m){
+   for (u in 1:m){
+    r_a = df[a, ]
+    r_u = df[u, ] 
+  
+    r_a_mean = mean(r_a)
+    r_a_sd = sd(r_a)
+    r_u_mean = mean(r_u)
+    r_u_sd = sd(r_u)
+  
+    variance_weight[a,u] <- sum(((r_a - r_a_mean)/r_a_sd) * ((r_u - r_u_mean)/r_u_sd) * v_i) / sum(v_i)
+  }
+}
+  
+  return(variance_weight)
+  
+}
+
+variance_weight1<-variance_weight_Fun(train1)
+#saveRDS(variance_weight1, file = "variance_weight Dataset1.RData")
+```
+
+
+### Dataset 2
+
+```{r}
+
+variance_weight_fun2= function(a,u,df) {
+  
+  a <- df[a, ]
+  u <- df[u, ]
+  
+  NA_Col_a <-  which(!is.na(a))
+  NA_Col_u <-  which(!is.na(a))
+  
+  c <- intersect(NA_Col_a,NA_Col_u)
+  r_a <- as.numeric(a[ , c])
+  r_u <- as.numeric(u[ , c])
+  # i is the id of movie, a and u are id of users
+  
+  r_a_mean = mean(r_a)
+  r_a_sd = sd(r_a)
+  r_u_mean = mean(r_u)
+  r_u_sd = sd(r_u)
+  
+  
+  n = length(c)
+  var <- vector()
+  for(i in 1:n) {
+    var[i] <- sum((na.omit(df[,c(i)])-mean(na.omit(df[,c(i)])))^2)/(length(na.omit(df[,c(i)])) - 1)
+  }
+  var_min <- min(var)
+  var_max <- max(var)
+  
+  v_i <- vector()
+  for(i in 1:n) {
+    v_i[i] <- (sum((na.omit(df[,c(i)])-mean(na.omit(df[,c(i)])))^2/(length(na.omit(df[,c(i)])) - 1)) - var_min) / var_max
+  }
+  
+  w_au = sum((r_a - r_a_mean) %*% (r_u - r_u_mean) %*% v_i) / sum(v_i)
+  return(w_au)
+  
+}
+
+
+users <- rownames(train2)
+m <- length(users)
+
+variance_weight2 <- matrix(rep(NA, m * m), m, m)
+variance_weight2 <- data.frame(variance_weight2)
+
+for (i in 1:m){
+  for (j in 1:m){
+    user_i <- users[i]
+    user_j <- users[j]
+    tmp  = train2[user_i, user_j]
+    if (is.integer(tmp)){
+      variance_weight2[i,j] <- variance_weight_fun2(users[i], users[j], train2)
+    }
+  }
+}
+
+#saveRDS(variance_weight2, file = "variance_weight Dataset2.RData") 
+
+```
+
+# Select neighbors: best-n
+
+```{r}
+
+selectNeighborWeights <- function(df, weights, n){
+  users <- rownames(df)
+  m <- length(users)
+  neighbors <- matrix(rep(NA, m * n), m, n)
+  neighors <- data.frame(neighbors)
+  rownames(neighbors) <- users
+  
+  for (i in 1:m){
+    neighbors[i, ] <- colnames(weights)[order(weights[i, ], decreasing=TRUE)][1:n]
+  }
+  return (neighbors)
+}
+
+```
+
+
+# Rating Normalization - z-score
+```{r}
+
+computeZScore <- function(weights, neighbors, df, a, i){
+  neighbors_a <- neighbors[toString(a), ] 
+  num <- rep(0, length(neighbors_a))
+  for (u in 1:length(neighbors_a)){
+    neighborU <- neighbors_a[u] 
+    r_ui <- df[toString(neighborU), toString(i)]
+    r_u <- mean(df[neighborU, ], na.rm = T)
+    sd_u <- sd(df[neighborU, ], na.rm = F)
+    w_au <- weights[toString(a), neighborU]
+    num[u] <- (r_ui - r_u)/sd_u * w_au
+  }
+  w_a <- sum(weights[toString(a), neighbors_a])
+  sd_a <- sd(df[toString(a), ])
+  index_not_i <- colnames(df) != i
+  r_a <- mean(df[toString(a), index_not_i])
+  p_ai <- r_a + sd_a * sum(num)/w_a
+  return (p_ai)
+}
+
+computeZScoreMatrix <- function(weights, neighbors, df, df_test){
+  a <- dim(df_test)[1]
+  b <- dim(df_test)[2]
+  users <- rownames(df_test)
+  website <- colnames(df_test)
+  computeZScoreMatrix <- matrix(rep(0, a * b), a, b)
+  for (i in 1:a){
+    for (j in 1:b){
+      ##if (is.na(df_test[i, j]) == F){ #data2
+        if (df_test[i, j] != 0){ data1
+        computeZScoreMatrix[i, j] <- computeZScore(weights, neighbors, df, users[i], website[j])
+      }
+      #computeZScoreMatrix[i, j] <- computeZScore(weights, neighbors, df, users[i], website[j])
+    }
+  }
+  return (computeZScoreMatrix)
+}
+
+```
+
+## Predict
+
+
+#####  Pearson
+
+```{r}
+neighbors_pearson_train1 <- selectNeighborWeights(train1, weights_pearson, 20)
+neighbors_pearson_train2 <- selectNeighborWeights(train2, weights_pearson_train2, 20)
+ZScoreMatrix_pearson_test1 <- computeZScoreMatrix(weights_pearson, neighbors_pearson_train1, train1,test1)
+ZScoreMatrix_pearson_test2 <- computeZScoreMatrix(weights_pearson_train2, neighbors_pearson_train2, train2,test2)
+```
+
+##### Spearman
+
+```{r}
+neighbors_spearman_train1 <- selectNeighborWeights(train1, weights_spearman, 20)
+neighbors_spearman_train2 <- selectNeighborWeights(train2, weights_spearman_train2, 20)
+ZScoreMatrix_spearman_test1 <- computeZScoreMatrix(weights_spearman, neighbors_spearman_train1, train1,test1)
+ZScoreMatrix_spearman_test2 <- computeZScoreMatrix(weights_spearman_train2, neighbors_spearman_train2, train2,test2)
+```
+
+##### MSD
+
+```{r}
+neighbors_MSD_train1 <- selectNeighborWeights(train1, weights_MSD_train1, 20)
+neighbors_MSD_train2 <- selectNeighborWeights(train2, weights_MSD_train2, 20)
+ZScoreMatrix_MSD_test1 <- computeZScoreMatrix(weights_MSD_train1, neighbors_MSD_train1, train1,test1)
+ZScoreMatrix_MSD_test2 <- computeZScoreMatrix(weights_MSD_train2, neighbors_MSD_train2, train2,test2)
+```
+
+
+##### SimRank
+```{r}
+neighbors_SR_train1 <- selectNeighborWeights(train1, User_Matrix, 20)
+neighbors_SR_train2 <- selectNeighborWeights(train2, Movie_Matrix, 20)
+ZScoreMatrix_SR_test1 <- computeZScoreMatrix(User_Matrix, neighbors_SR_train1, train1,test1)
+ZScoreMatrix_SR_test2 <- computeZScoreMatrix(Movie_Matrix, neighbors_SR_train2, train2,test2)
+```
+
+##### Pearson + Sig
+
+```{r}
+neighbors_pearson_sig_train1 <- selectNeighborWeights(train1, significant_weight, 20)
+neighbors_pearson_sig_train2 <- selectNeighborWeights(train2, significant_weight2, 20)
+ZScoreMatrix_pearson_sig_test1 <- computeZScoreMatrix(significant_weight, neighbors_pearson_sig_train1, train1,test1)
+ZScoreMatrix_pearson_sig_test2 <- computeZScoreMatrix(significant_weight2, neighbors_pearson_sig_train2, train2,test2)
+```
+
+
+##### Pearson + Var
+
+```{r}
+neighbors_pearson_var_train1 <- selectNeighborWeights(train1, variance_weight1, 20)
+neighbors_pearson_var_train2 <- selectNeighborWeights(train2, variance_weight2, 20)
+ZScoreMatrix_pearson_var_test1 <- computeZScoreMatrix(variance_weight1, neighbors_pearson_var_train1, train1,test1)
+ZScoreMatrix_pearson_var_test2 <- computeZScoreMatrix(variance_weight2, neighbors_pearson_var_train2, train2,test2)
+```
+
+
+
+
